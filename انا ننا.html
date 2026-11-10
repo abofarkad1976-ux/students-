@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ملتقى الطلاب</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#1b1f2a;--mut:#6b7280;--pri:#4f46e5;--ptx:#fff;--bd:#e5e7eb;--q:#fef3c7;--i:#dcfce7;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#12141c;--card:#1c1f2b;--tx:#eceef5;--mut:#9aa1b2;--pri:#818cf8;--ptx:#12141c;--bd:#2b3040;--q:#4a3b12;--i:#14391f;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,"Segoe UI",Tahoma,Arial,sans-serif;line-height:1.6}
+main{max-width:640px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:8px 0 4px}h2{font-size:1.1rem;margin:0}
+.sub{color:var(--mut);margin:0 0 16px;font-size:.95rem}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+.grp{display:flex;justify-content:space-between;align-items:center;cursor:pointer;width:100%;text-align:right;font:inherit;color:inherit}
+.cnt{color:var(--mut);font-size:.85rem}
+input,textarea,select{width:100%;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:10px;margin-bottom:8px}
+textarea{min-height:80px;resize:vertical}
+button{font:inherit;cursor:pointer}
+.btn{background:var(--pri);color:var(--ptx);border:0;border-radius:10px;padding:10px 16px;font-weight:600}
+.btn.alt{background:none;color:var(--pri);border:1px solid var(--pri)}
+.link{background:none;border:0;color:var(--pri);padding:4px 0;font-weight:600}
+.row{display:flex;gap:8px}.row>input{margin-bottom:0}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.chip{display:inline-block;border-radius:99px;padding:1px 10px;font-size:.8rem;font-weight:600;color:var(--tx)}
+.chip.q{background:var(--q)}.chip.i{background:var(--i)}
+.meta{color:var(--mut);font-size:.82rem;margin:4px 0 6px}
+.txt{white-space:pre-wrap;word-break:break-word}
+.rep{border-right:3px solid var(--bd);padding:2px 10px;margin:8px 0}
+.note{background:var(--card);border:1px dashed var(--bd);border-radius:12px;padding:14px;text-align:center;color:var(--mut);margin-bottom:12px}
+#toast{position:fixed;inset:auto 16px 16px;background:var(--tx);color:var(--bg);padding:10px 14px;border-radius:10px;display:none;text-align:center}
+</style>
+</head>
+<body>
+<main>
+  <section id="auth" hidden>
+    <h1>🎓 ملتقى الطلاب</h1>
+    <p class="sub">سجّل دخولك أو أنشئ حساب جديد لتشارك مع زملائك.</p>
+    <div class="card">
+      <input id="aname" placeholder="اسمك (للحساب الجديد فقط)" maxlength="30">
+      <input id="aemail" type="email" placeholder="البريد الإلكتروني" dir="ltr">
+      <input id="apass" type="password" placeholder="كلمة السر (6 أحرف على الأقل)" dir="ltr">
+      <div class="row"><button class="btn" id="login">دخول</button><button class="btn alt" id="signup">حساب جديد</button></div>
+    </div>
+  </section>
+  <section id="home" hidden>
+    <div class="top"><h1>🎓 ملتقى الطلاب</h1><button class="link" id="logout">خروج</button></div>
+    <p class="sub">اختر مادة أو مجموعة، واسأل وشارك معلوماتك مع زملائك.</p>
+    <div id="groups"></div>
+    <div class="card">
+      <h2>إنشاء مجموعة جديدة</h2>
+      <div class="row" style="margin-top:8px"><input id="gname" placeholder="مثال: رياضيات - الصف العاشر" maxlength="60"><button class="btn" id="addg">إضافة</button></div>
+    </div>
+  </section>
+  <section id="grp" hidden>
+    <button class="link" id="back">→ رجوع للمجموعات</button>
+    <h1 id="gtitle"></h1>
+    <div class="card">
+      <select id="kind"><option value="q">❓ سؤال</option><option value="i">💡 معلومة / ملخص</option></select>
+      <textarea id="ptext" placeholder="اكتب سؤالك أو المعلومة اللي بدك تشاركها…" maxlength="2000"></textarea>
+      <button class="btn" id="addp">نشر</button>
+    </div>
+    <div id="posts"></div>
+  </section>
+</main>
+<div id="toast"></div>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
+import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,updateProfile} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
+import {getFirestore,collection,addDoc,query,orderBy,limit,onSnapshot} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+
+const app=initializeApp({
+  apiKey:"AIzaSyBDn_LQQAfkBxqgULAFw3-iB_3K25oab4U",
+  authDomain:"students-344be.firebaseapp.com",
+  projectId:"students-344be",
+  storageBucket:"students-344be.firebasestorage.app",
+  messagingSenderId:"80483422401",
+  appId:"1:80483422401:web:b01dff3a5257ce68718440"
+});
+const auth=getAuth(app),db=getFirestore(app);
+const $=s=>document.querySelector(s);
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',3500)};
+const when=ts=>{try{return new Date(ts).toLocaleString('ar',{dateStyle:'short',timeStyle:'short'})}catch(e){return''}};
+const ERR={'auth/invalid-email':'البريد غير صحيح','auth/missing-password':'اكتب كلمة السر','auth/weak-password':'كلمة السر ضعيفة (6 أحرف على الأقل)','auth/email-already-in-use':'هذا البريد مسجّل من قبل','auth/invalid-credential':'البريد أو كلمة السر غلط','auth/operation-not-allowed':'فعّل Email/Password من إعدادات Firebase','auth/network-request-failed':'مشكلة بالاتصال'};
+
+let groups=[],posts=[],replies=[],cur=null,pending=false,unsubs=[];
+const drafts={};
+
+function later(){
+  const a=document.activeElement;
+  if(a&&a.classList&&a.classList.contains('rin')){pending=true;return}
+  render();
+}
+document.addEventListener('focusout',()=>{if(pending)setTimeout(later,150)});
+
+function render(){
+  pending=false;
+  $('#home').hidden=!!cur;$('#grp').hidden=!cur;
+  if(!cur){
+    const box=$('#groups');box.textContent='';
+    if(!groups.length)box.append(el('div','note','ما في مجموعات بعد. أنشئ أول مجموعة من تحت 👇'));
+    groups.forEach(g=>{
+      const n=posts.filter(p=>p.gid===g.id).length;
+      const b=el('button','card grp');b.append(el('h2','',g.name),el('span','cnt',n+' منشور'));
+      b.onclick=()=>{cur=g;$('#gtitle').textContent=g.name;render();scrollTo(0,0)};
+      box.append(b);
+    });
+    return;
+  }
+  const box=$('#posts');box.textContent='';
+  const list=posts.filter(p=>p.gid===cur.id);
+  if(!list.length)box.append(el('div','note','لسا ما في منشورات. كن أول من يسأل أو يشارك!'));
+  list.forEach(p=>{
+    const c=el('div','card');
+    c.append(el('span','chip '+(p.kind==='i'?'i':'q'),p.kind==='i'?'💡 معلومة':'❓ سؤال'));
+    c.append(el('div','meta',(p.name||'طالب')+' · '+when(p.ts)));
+    c.append(el('div','txt',p.text));
+    replies.filter(r=>r.pid===p.id).forEach(r=>{
+      const d=el('div','rep');d.append(el('div','txt',r.text),el('div','meta',(r.name||'طالب')+' · '+when(r.ts)));c.append(d);
+    });
+    const row=el('div','row');row.style.marginTop='8px';
+    const inp=el('input','rin');inp.placeholder='اكتب رداً…';inp.maxLength=1000;inp.value=drafts[p.id]||'';
+    inp.oninput=()=>{drafts[p.id]=inp.value};
+    const send=el('button','btn','رد');
+    send.onclick=async()=>{
+      const t=inp.value.trim();if(!t)return;
+      if(await write('replies',{pid:p.id,text:t})){drafts[p.id]='';inp.value=''}
+    };
+    row.append(inp,send);c.append(row);box.append(c);
+  });
+}
+
+async function write(col,data){
+  const u=auth.currentUser;if(!u)return false;
+  try{await addDoc(collection(db,col),{...data,by:u.uid,name:u.displayName||'طالب',ts:Date.now()});return true}
+  catch(e){toast('ما قدرنا نحفظ: '+e.code);return false}
+}
+
+const sub=(name,dir,lim,set)=>onSnapshot(query(collection(db,name),orderBy('ts',dir),limit(lim)),
+  s=>{set(s.docs.map(d=>({id:d.id,...d.data()})));if(name==='groups'&&cur)cur=groups.find(g=>g.id===cur.id)||null;later()},
+  e=>toast('تعذّر تحميل البيانات: '+e.code));
+
+onAuthStateChanged(auth,u=>{
+  unsubs.forEach(f=>f());unsubs=[];cur=null;
+  $('#auth').hidden=!!u;
+  if(u){
+    unsubs=[sub('groups','asc',200,v=>groups=v),sub('posts','desc',400,v=>posts=v),sub('replies','asc',1000,v=>replies=v)];
+    render();
+  }else{$('#home').hidden=true;$('#grp').hidden=true}
+});
+
+async function doAuth(signup){
+  const email=$('#aemail').value.trim(),pass=$('#apass').value,name=$('#aname').value.trim();
+  if(signup&&!name){toast('اكتب اسمك أول');return}
+  try{
+    if(signup){const r=await createUserWithEmailAndPassword(auth,email,pass);await updateProfile(r.user,{displayName:name})}
+    else await signInWithEmailAndPassword(auth,email,pass);
+  }catch(e){toast(ERR[e.code]||('خطأ: '+e.code))}
+}
+$('#login').onclick=()=>doAuth(false);
+$('#signup').onclick=()=>doAuth(true);
+$('#logout').onclick=()=>signOut(auth);
+$('#back').onclick=()=>{cur=null;render()};
+$('#addg').onclick=async()=>{const n=$('#gname').value.trim();if(n&&await write('groups',{name:n}))$('#gname').value=''};
+$('#addp').onclick=async()=>{
+  const t=$('#ptext').value.trim();if(!t||!cur)return;
+  if(await write('posts',{gid:cur.id,kind:$('#kind').value,text:t}))$('#ptext').value='';
+};
+</script>
+</body>
+</html>
